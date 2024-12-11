@@ -1,10 +1,7 @@
+use crate::core::Core;
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
-
-use serde::de::{Error, Visitor};
-use serde::{Deserialize, Deserializer};
-use std::time::Duration;
+use std::fmt::Debug;
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -105,24 +102,13 @@ pub struct Service {
     pub endpoint: String,
     // Deny/Allow request when faced with an irrecoverable failure.
     pub failure_mode: FailureMode,
-    #[serde(default)]
-    pub timeout: Timeout,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Timeout(pub Duration);
-impl Default for Timeout {
-    fn default() -> Self {
-        Timeout(Duration::from_millis(20))
-    }
-}
+impl TryFrom<PluginConfiguration> for Core {
+    type Error = String;
 
-impl<'de> Deserialize<'de> for Timeout {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(TimeoutVisitor)
+    fn try_from(_config: PluginConfiguration) -> Result<Self, Self::Error> {
+        todo!();
     }
 }
 
@@ -136,13 +122,11 @@ mod test {
                 "type": "auth",
                 "endpoint": "authorino-cluster",
                 "failureMode": "deny",
-                "timeout": "24ms"
             },
             "limitador": {
                 "type": "ratelimit",
                 "endpoint": "limitador-cluster",
                 "failureMode": "allow",
-                "timeout": "42ms"
             }
         },
         "actionSets": [
@@ -202,7 +186,6 @@ mod test {
             assert_eq!(auth_service.service_type, ServiceType::Auth);
             assert_eq!(auth_service.endpoint, "authorino-cluster");
             assert_eq!(auth_service.failure_mode, FailureMode::Deny);
-            assert_eq!(auth_service.timeout, Timeout(Duration::from_millis(24)))
         } else {
             panic!()
         }
@@ -211,7 +194,6 @@ mod test {
             assert_eq!(rl_service.service_type, ServiceType::RateLimit);
             assert_eq!(rl_service.endpoint, "limitador-cluster");
             assert_eq!(rl_service.failure_mode, FailureMode::Allow);
-            assert_eq!(rl_service.timeout, Timeout(Duration::from_millis(42)))
         } else {
             panic!()
         }
@@ -316,15 +298,6 @@ mod test {
 
         let plugin_config = res.expect("result is ok");
         assert_eq!(plugin_config.action_sets.len(), 1);
-
-        let services = &plugin_config.services;
-        assert_eq!(
-            services
-                .get("limitador")
-                .expect("limitador service to be set")
-                .timeout,
-            Timeout(Duration::from_millis(20))
-        );
 
         let predicates = &plugin_config.action_sets[0]
             .route_rule_conditions

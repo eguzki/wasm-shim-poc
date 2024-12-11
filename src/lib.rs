@@ -2,7 +2,9 @@ use log::info;
 use proxy_wasm::traits::*;
 use proxy_wasm::types::*;
 
-pub(crate) mod root_context;
+mod configuration;
+mod core;
+mod root_context;
 
 proxy_wasm::main! {{
     proxy_wasm::set_log_level(LogLevel::Trace);
@@ -12,6 +14,6 @@ proxy_wasm::main! {{
     }));
     proxy_wasm::set_root_context(|context_id| -> Box<dyn RootContext> {
         info!("#{} set_root_context", context_id);
-        Box::new(root_context::FilterRoot { context_id, config: Default::default(), })
+        Box::new(root_context::FilterRoot { context_id, core: Default::default(), })
     });
 }}

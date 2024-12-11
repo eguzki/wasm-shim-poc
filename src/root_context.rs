@@ -1,7 +1,12 @@
+use crate::configuration::PluginConfiguration;
+use crate::core::Core;
+use http_context::Filter;
 use log::{debug, error, info};
 use proxy_wasm::traits::{Context, HttpContext, RootContext};
 use proxy_wasm::types::ContextType;
 use std::rc::Rc;
+
+mod http_context;
 
 pub struct FilterRoot {
     pub context_id: u32,
@@ -11,12 +16,9 @@ pub struct FilterRoot {
 impl RootContext for FilterRoot {
     fn create_http_context(&self, context_id: u32) -> Option<Box<dyn HttpContext>> {
         debug!("#{} create_http_context", context_id);
-        let header_resolver = Rc::new(HeaderResolver::new());
         Some(Box::new(Filter {
             context_id,
             core: Rc::clone(&self.core),
-            response_headers_to_add: Vec::default(),
-            operation_dispatcher: OperationDispatcher::new(header_resolver).into(),
         }))
     }
 
@@ -29,15 +31,14 @@ impl RootContext for FilterRoot {
         match serde_json::from_slice::<PluginConfiguration>(&configuration) {
             Ok(config) => {
                 info!("plugin config parsed: {:?}", config);
-                let runtime_config = match <PluginConfiguration as TryInto<Core>>::try_into(config)
-                {
-                    Ok(cfg) => cfg,
+                let core = match Core::try_from(config) {
+                    Ok(core) => core,
                     Err(err) => {
                         error!("failed to compile plugin config: {}", err);
                         return false;
                     }
                 };
-                self.config = Rc::new(runtime_config);
+                self.core = Rc::new(core);
             }
             Err(e) => {
                 error!("failed to parse plugin config: {}", e);
