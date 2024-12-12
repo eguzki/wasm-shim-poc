@@ -27,6 +27,18 @@ impl Filter {
             }
         }
     }
+
+    fn handle_operation(&mut self, operation: crate::core::Operation) {
+        match operation {
+            crate::core::Operation::Await => {} // Nothing else to be done
+            crate::core::Operation::Done => self.resume_http_request(),
+            crate::core::Operation::Die(die) => self.send_http_response(
+                die.status,
+                Vec::default(),
+                Some(b"Internal Server Error.\n"),
+            ),
+        }
+    }
 }
 
 impl HttpContext for Filter {
@@ -46,7 +58,18 @@ impl HttpContext for Filter {
             }
             Some(policy_chain) => {
                 self.dispatcher.load(policy_chain);
-                self.dispatcher.start(&HttpContextImpl)
+                match self.dispatcher.start(&HttpContextImpl) {
+                    crate::core::Operation::Await => Action::Pause, // Nothing else to be done
+                    crate::core::Operation::Done => Action::Continue,
+                    crate::core::Operation::Die(die) => {
+                        self.send_http_response(
+                            die.status,
+                            Vec::default(),
+                            Some(b"Internal Server Error.\n"),
+                        );
+                        Action::Continue
+                    }
+                }
             }
         }
     }
@@ -68,13 +91,13 @@ impl Context for Filter {
             "#{} on_grpc_call_response: token: {token_id}, status: {status_code}",
             self.context_id
         );
-        self.dispatcher
-            .on_grpc_call_response(token_id, status_code, resp_size, &HttpContextImpl);
-        //  Here three possible actions:
-        //  A) nothing to be done, we need to wait for more events (maybe other grpc response or
-        //  http responses
-        //  B) Send error: self.send_http_response(500, vec![], Some(b"Internal Server Error.\n"))
-        //  C) Resume request: self.resume_http_request()
+        let operation = self.dispatcher.on_grpc_call_response(
+            token_id,
+            status_code,
+            resp_size,
+            &HttpContextImpl,
+        );
+        self.handle_operation(operation);
     }
 
     fn on_http_call_response(
@@ -88,17 +111,13 @@ impl Context for Filter {
             "#{} on_http_call_response: token: {token_id}, num_headers: {num_headers}, body_size: {body_size}, num_trailers: {num_trailers}",
             self.context_id
         );
-        self.dispatcher.on_http_call_response(
+        let operation = self.dispatcher.on_http_call_response(
             token_id,
             num_headers,
             body_size,
             num_trailers,
             &HttpContextImpl,
         );
-        //  Here three possible actions:
-        //  A) nothing to be done, we need to wait for more events (maybe other grpc response or
-        //  http responses
-        //  B) Send error: self.send_http_response(500, vec![], Some(b"Internal Server Error.\n"))
-        //  C) Resume request: self.resume_http_request()
+        self.handle_operation(operation);
     }
 }

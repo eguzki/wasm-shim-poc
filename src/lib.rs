@@ -14,6 +14,6 @@ proxy_wasm::main! {{
     }));
     proxy_wasm::set_root_context(|context_id| -> Box<dyn RootContext> {
         info!("#{} set_root_context", context_id);
-        Box::new(root_context::FilterRoot { context_id, core: Default::default(), })
+        Box::new(root_context::FilterRoot { context_id, index: Default::default(), })
     });
 }}

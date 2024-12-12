@@ -1,4 +1,3 @@
-use crate::core::Core;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -104,7 +103,7 @@ pub struct Service {
     pub failure_mode: FailureMode,
 }
 
-impl TryFrom<PluginConfiguration> for Core {
+impl TryFrom<PluginConfiguration> for crate::core::PolicyChainIndex {
     type Error = String;
 
     fn try_from(_config: PluginConfiguration) -> Result<Self, Self::Error> {

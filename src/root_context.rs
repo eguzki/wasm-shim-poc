@@ -1,5 +1,5 @@
 use crate::configuration::PluginConfiguration;
-use crate::core::Core;
+use crate::core::{PolicyChainDispatcher, PolicyChainIndex};
 use http_context::Filter;
 use log::{debug, error, info};
 use proxy_wasm::traits::{Context, HttpContext, RootContext};
@@ -10,7 +10,7 @@ mod http_context;
 
 pub struct FilterRoot {
     pub context_id: u32,
-    pub core: Rc<Core>,
+    pub index: Rc<PolicyChainIndex>,
 }
 
 impl RootContext for FilterRoot {
@@ -18,7 +18,8 @@ impl RootContext for FilterRoot {
         debug!("#{} create_http_context", context_id);
         Some(Box::new(Filter {
             context_id,
-            core: Rc::clone(&self.core),
+            index: Rc::clone(&self.index),
+            dispatcher: PolicyChainDispatcher::default(),
         }))
     }
 
@@ -31,14 +32,14 @@ impl RootContext for FilterRoot {
         match serde_json::from_slice::<PluginConfiguration>(&configuration) {
             Ok(config) => {
                 info!("plugin config parsed: {:?}", config);
-                let core = match Core::try_from(config) {
-                    Ok(core) => core,
+                let index = match crate::core::PolicyChainIndex::try_from(config) {
+                    Ok(index) => index,
                     Err(err) => {
                         error!("failed to compile plugin config: {}", err);
                         return false;
                     }
                 };
-                self.core = Rc::new(core);
+                self.index = Rc::new(index);
             }
             Err(e) => {
                 error!("failed to parse plugin config: {}", e);
